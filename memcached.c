@@ -3182,6 +3182,12 @@ static void complete_update_ascii(conn *c)
         mc_logger->log(EXTENSION_LOG_WARNING, c,
                        "%d: Failed to get item info\n", c->sfd);
         out_string(c, "SERVER_ERROR failed to get item details");
+#ifdef ENABLE_LARGE_ITEM
+        if (c->hinfo.addnl != NULL) {
+            free(c->hinfo.addnl);
+            c->hinfo.addnl = NULL;
+        }
+#endif
         return;
     }
 
@@ -3278,6 +3284,12 @@ static void complete_update_ascii(conn *c)
     }
     c->store_op = 0;
     c->item = 0;
+#ifdef ENABLE_LARGE_ITEM
+    if (c->hinfo.addnl != NULL) {
+        free(c->hinfo.addnl);
+        c->hinfo.addnl = NULL;
+    }
+#endif
 }
 
 /**

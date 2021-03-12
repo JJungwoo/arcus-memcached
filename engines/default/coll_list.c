@@ -411,6 +411,97 @@ void list_elem_release(list_elem_item **elem_array, const int elem_count)
     UNLOCK_CACHE();
 }
 
+#ifdef ENABLE_LARGE_ITEM
+static item_attr *item_attr_alloc(const int flags, const rel_time_t exptime) {
+    item_attr *attrp = (item_attr *)malloc(sizeof(item_attr *));
+    if (attrp == NULL) {
+        return NULL;
+    }
+
+    attrp->flags = flags;
+    attrp->exptime = exptime;
+    attrp->maxcount = 0;
+    attrp->ovflaction = 0;
+    attrp->readable = 1;
+
+    return attrp;
+}
+
+hash_item *do_large_item_alloc(const void* key, const int nkey,
+                               uint32_t nbytes, const int flags,
+                               const rel_time_t exptime, const void *cookie)
+{
+    hash_item *it;
+    uint32_t total = nbytes;
+    list_elem_item *elem;
+    list_elem_item *head = NULL;
+    list_elem_item *cur = NULL;
+    item_attr      *attrp;
+
+    ENGINE_ERROR_CODE ret = ENGINE_SUCCESS;
+
+    attrp = item_attr_alloc(flags, exptime);
+    if (attrp == NULL) {
+        return NULL;
+    }
+
+    it = do_list_item_alloc(key, nkey, attrp, cookie);
+    if (it == NULL) {
+        ret = ENGINE_ENOMEM;
+    }
+
+    list_meta_info *info = (list_meta_info *)item_get_meta(it);
+
+    while (total > 0 && ret == ENGINE_SUCCESS) {
+        nbytes = (total >= config->max_element_bytes ? config->max_element_bytes : total);
+        elem = do_list_elem_alloc(nbytes, cookie);
+        if (elem == NULL) {
+            ret = ENGINE_ENOMEM;
+            break;
+        }
+        if (cur == NULL) {
+            cur = elem;
+            head = cur;
+            head->prev = NULL;
+        } else {
+            cur->next = elem;
+            elem->prev = cur;
+            cur = elem;
+        }
+        total -= nbytes;
+        info->ccnt++;
+    }
+    cur->next = NULL;
+
+    if (ret == ENGINE_SUCCESS) {
+        info->head = head;
+        info->tail = cur;
+        it->iflag |= ITEM_IFLAG_LARGE;
+    }
+    if (ret != ENGINE_SUCCESS && it != NULL) {
+        do_item_free(it);
+        it = NULL;
+    }
+    free(attrp);
+
+    return it;
+}
+
+void do_large_item_link(hash_item *it)
+{
+    list_meta_info *info = (list_meta_info *)item_get_meta(it);
+    list_elem_item *elem = info->head;
+
+    while(elem != NULL) {
+        size_t stotal = slabs_space_size(do_list_elem_ntotal(elem));
+        CLOG_LIST_ELEM_INSERT(info, -1, elem);
+        do_coll_space_incr((coll_meta_info *)info, ITEM_TYPE_LIST, stotal);
+        elem = elem->next;
+    }
+}
+
+#endif
+
 ENGINE_ERROR_CODE list_elem_insert(const char *key, const uint32_t nkey,
                                    int index, list_elem_item *elem,
                                    item_attr *attrp,

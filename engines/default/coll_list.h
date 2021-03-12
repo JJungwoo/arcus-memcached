@@ -23,6 +23,13 @@
 /*
  * List Collection
  */
+#ifdef ENABLE_LARGE_ITEM
+hash_item *do_large_item_alloc(const void* key, const int nkey,
+                               uint32_t nbytes, const int flags,
+                               const rel_time_t exptime, const void *cookie);
+void do_large_item_link(hash_item *it);
+#endif
+
 ENGINE_ERROR_CODE list_struct_create(const char *key, const uint32_t nkey,
                                      item_attr *attrp, const void *cookie);
 

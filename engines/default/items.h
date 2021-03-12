@@ -185,6 +185,9 @@ ENGINE_ERROR_CODE item_apply_setattr_collinfo(void *engine, hash_item *it,
 ENGINE_ERROR_CODE item_apply_lru_update(void *engine, const char *key, const uint32_t nkey);
 ENGINE_ERROR_CODE item_apply_flush(void *engine, const char *prefix, const int nprefix);
 
+#ifdef ENABLE_LARGE_ITEM
+bool coll_large_item_info_get(list_elem_item *elem, item_info *info);
+#endif
 
 /**
  * Item Scan Facility

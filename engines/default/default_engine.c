@@ -319,8 +319,12 @@ default_item_allocate(ENGINE_HANDLE* handle, const void* cookie,
 {
     uint32_t ntotal = item_kv_size(nkey, nbytes);
     unsigned int id = slabs_clsid(ntotal);
+
     if (id == 0) {
+#ifdef ENABLE_LARGE_ITEM
+#else
         return ENGINE_E2BIG;
+#endif
     }
 
     hash_item *it;
@@ -1658,7 +1662,26 @@ get_item_info(ENGINE_HANDLE *handle, const void *cookie,
     item_info->naddnl = 0;
     item_info->key = item_get_key(it);
     item_info->value = item_get_data(it);
+#ifdef ENABLE_LARGE_ITEM
+    if (IS_LARGE_ITEM(it)) {
+        if (item_info->addnl != NULL) {
+            free(item_info->addnl);
+            item_info->addnl = NULL;
+        } else {
+            list_meta_info *info = (list_meta_info*)item_get_meta(it);
+            item_info->naddnl = info->ccnt;
+            item_info->nvalue = 0;
+            list_elem_item *elem = (list_elem_item*)info->head;
+            if (!coll_large_item_info_get(elem, item_info)) {
+                return false;
+            }
+        }
+    } else {
+        item_info->addnl = NULL;
+    }
+#else
     item_info->addnl = NULL;
+#endif
     return true;
 }
 

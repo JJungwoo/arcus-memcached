@@ -79,7 +79,26 @@ static ENGINE_ERROR_CODE do_item_store_set(hash_item *it, uint64_t *cas, const v
     ENGINE_ERROR_CODE stored;
 
     old_it = do_item_get(item_get_key(it), it->nkey, DONT_UPDATE);
+#ifdef ENABLE_LARGE_ITEM
+    if (IS_LARGE_ITEM(it)) {
+        if (old_it) {
+            if (!IS_LARGE_ITEM(old_it)) {
+                stored = ENGINE_EBADTYPE;
+            } else {
+                do_item_replace(old_it, it);
+                stored = ENGINE_SUCCESS;
+            }
+            do_item_release(old_it);
+        } else {
+            stored = do_item_link(it);
+        }
+        if (stored == ENGINE_SUCCESS) {
+            do_large_item_link(it);
+        }
+    } else if (old_it) {
+#else
     if (old_it) {
+#endif
         if (IS_COLL_ITEM(old_it)) {
             stored = ENGINE_EBADTYPE;
         } else {
@@ -282,10 +301,20 @@ hash_item *item_alloc(const void *key, const uint32_t nkey,
                       const uint32_t nbytes, const void *cookie)
 {
     hash_item *it;
+#ifdef ENABLE_LARGE_ITEM
+    if (nbytes > MIN_LARGE_ITEM_SIZE) {
+        LOCK_CACHE();
+        it = do_large_item_alloc(key, nkey, nbytes, flags, exptime, cookie);
+        UNLOCK_CACHE();
+    } else {
+#endif
     LOCK_CACHE();
     /* key can be NULL */
     it = do_item_alloc(key, nkey, flags, exptime, nbytes, cookie);
     UNLOCK_CACHE();
+#ifdef ENABLE_LARGE_ITEM
+    }
+#endif
     return it;
 }
 
@@ -331,7 +360,6 @@ ENGINE_ERROR_CODE item_store(hash_item *item, uint64_t *cas,
                              const void *cookie)
 {
     ENGINE_ERROR_CODE ret;
-    PERSISTENCE_ACTION_BEGIN(cookie, UPD_STORE);
 
     LOCK_CACHE();
     switch (operation) {
@@ -1954,3 +1982,38 @@ void item_final(struct default_engine *engine_ptr)
     item_clog_final(engine);
     logger->log(EXTENSION_LOG_INFO, NULL, "ITEM module destroyed.\n");
 }
+
+#ifdef ENABLE_LARGE_ITEM
+#define GET_8_ALIGN_SIZE(size) \
+        (((size) % 8) == 0 ? (size) : ((size) + (8 - ((size) % 8))))
+static inline void *coll_elem_data_ptr(list_elem_item *elem)
+{
+    return (void *)((char *)elem +
+        GET_8_ALIGN_SIZE(sizeof(uint16_t) + sizeof(uint8_t) + sizeof(uint32_t)
+         + sizeof(list_elem_item *) + sizeof(list_elem_item *)));
+}
+bool coll_large_item_info_get(list_elem_item *elem, item_info *info)
+{
+    list_elem_item *cur = elem;
+    int  count = 0;
+    char *mptr = NULL;
+
+    info->addnl = (value_item **)malloc(sizeof(value_item *) * info->naddnl);
+    if (info->addnl == NULL) {
+        return false;
+    }
+
+    while (cur != NULL) {
+        info->addnl[count] = (value_item *)coll_elem_data_ptr((list_elem_item *)cur);
+        mptr = (char *)info->addnl[count];
+        info->addnl[count]->len = cur->nbytes;
+        mptr += sizeof(uint32_t);
+        mptr = (char *)cur->value;
+        count++;
+        cur = cur->next;
+    }
+
+    assert(count == info->naddnl);
+    return true;
+}
+#endif

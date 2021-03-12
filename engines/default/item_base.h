@@ -104,6 +104,9 @@ enum elem_delete_cause {
 #define ITEM_IFLAG_SET   2   /* set item */
 #define ITEM_IFLAG_MAP   3   /* map item */
 #define ITEM_IFLAG_BTREE 4   /* b+tree item */
+#ifdef ENABLE_LARGE_ITEM
+#define ITEM_IFLAG_LARGE 5   /* large item */
+#endif
 #define ITEM_IFLAG_COLL  7   /* collection item: list/set/map/b+tree */
 /* 2) item flag: decreasing order */
 #define ITEM_LINKED      32  /* linked to assoc hash table */
@@ -116,6 +119,9 @@ enum elem_delete_cause {
 #define IS_SET_ITEM(it)   (((it)->iflag & ITEM_IFLAG_COLL) == ITEM_IFLAG_SET)
 #define IS_MAP_ITEM(it)   (((it)->iflag & ITEM_IFLAG_COLL) == ITEM_IFLAG_MAP)
 #define IS_BTREE_ITEM(it) (((it)->iflag & ITEM_IFLAG_COLL) == ITEM_IFLAG_BTREE)
+#ifdef ENABLE_LARGE_ITEM
+#define IS_LARGE_ITEM(it) (((it)->iflag & ITEM_IFLAG_COLL) == ITEM_IFLAG_LARGE)
+#endif
 #define IS_COLL_ITEM(it)  (((it)->iflag & ITEM_IFLAG_COLL) != 0)
 
 /* collection meta flag */

@@ -43,6 +43,9 @@ struct default_engine;
 
 #define MAX_FILEPATH_LENGTH 4096
 #define MAX_FILENAME_LENGTH 256
+#ifdef ENABLE_LARGE_ITEM
+#define MIN_LARGE_ITEM_SIZE 131072 // 128KB
+#endif
 
 /**
  * engine configuration
